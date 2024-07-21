@@ -5,12 +5,14 @@ Copyright © 2024 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
-	"fmt"
-
-	"github.com/spf13/cobra"
+    "encoding/json"
+    "fmt"
+    "io/ioutil"
+    "net/http"
+    "github.com/spf13/cobra"
+    "fastrack/quiz/backend"
 )
 
-// getQuestionsCmd represents the getQuestions command
 var getQuestionsCmd = &cobra.Command{
 	Use:   "getQuestions",
 	Short: "A brief description of your command",
@@ -28,23 +30,32 @@ to quickly create a Cobra application.`,
 func init() {
 	rootCmd.AddCommand(getQuestionsCmd)
 
-	questions := map[string]string{
-	   "1" : "What is the capital of Spain?",
-	   "2" : "How much are 2 + 2?",
-	}
+    resp, err := http.Get("http://localhost:8080/questions")
 
-	questionOptions := map[string][]string{
-	    "1" : {"Madrid", "Barcelona", "Seville", "Valencia"},
-	    "2" : {"2", "4", "5", "6"},
+    if err != nil {
+        fmt.Println("Error fetching questions:", err)
+        return
+    }
+    defer resp.Body.Close()
+    body, err := ioutil.ReadAll(resp.Body)
+    if err != nil {
+        fmt.Println("Error reading response body:", err)
+        return
     }
 
-// CHECK. Sort map so index are shown in order.
-    for questionId, question := range questions {
-        fmt.Println(questionId + ") " + question)
-        optionIndex := "a"
-        for _, option := range questionOptions[questionId] {
-            fmt.Println("\t" + optionIndex + ") " + option)
-            optionIndex = string(rune(optionIndex[0]) + 1)
+    var questions []backend.Question
+    err = json.Unmarshal(body, &questions)
+    if err != nil {
+        fmt.Println("Error unmarshalling response:", err)
+        return
+    }
+
+    for _, q := range questions {
+        fmt.Printf("%d) %s \n", q.Id, q.Question)
+        optionIndex := 1
+        for _, option := range q.Options {
+            fmt.Printf("\t %d) %s \n", optionIndex, option)
+            optionIndex++
         }
     }
 }
