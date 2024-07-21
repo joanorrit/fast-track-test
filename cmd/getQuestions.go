@@ -11,6 +11,10 @@ import (
     "net/http"
     "github.com/spf13/cobra"
     "fastrack/quiz/backend"
+    "bufio"
+    "os"
+    "strings"
+    "bytes"
 )
 
 var getQuestionsCmd = &cobra.Command{
@@ -30,32 +34,84 @@ to quickly create a Cobra application.`,
 func init() {
 	rootCmd.AddCommand(getQuestionsCmd)
 
-    resp, err := http.Get("http://localhost:8080/questions")
-
+    body, err := fetchQuestions("http://localhost:8080/questions")
     if err != nil {
-        fmt.Println("Error fetching questions:", err)
-        return
-    }
-    defer resp.Body.Close()
-    body, err := ioutil.ReadAll(resp.Body)
-    if err != nil {
-        fmt.Println("Error reading response body:", err)
+        fmt.Println("Error:", err)
         return
     }
 
-    var questions []backend.Question
-    err = json.Unmarshal(body, &questions)
+    questions, err := unmarshalQuestions(body)
     if err != nil {
         fmt.Println("Error unmarshalling response:", err)
         return
     }
 
+    var answers []backend.Answer
+
     for _, q := range questions {
         fmt.Printf("%d) %s \n", q.Id, q.Question)
-        optionIndex := 1
-        for _, option := range q.Options {
-            fmt.Printf("\t %d) %s \n", optionIndex, option)
-            optionIndex++
+
+        for i, option := range q.Options {
+            fmt.Printf("\t %d) %s \n", i+1, option)
+        }
+
+        answers = readAnswerFromInput(answers, q)
+    }
+
+    jsonData, err := json.Marshal(answers)
+    if err != nil {
+        fmt.Println("Error marshalling answers:", err)
+        return
+    }
+    fmt.Println(answers)
+    resp, err := http.Post("http://localhost:8080/submit-answers", "application/json", bytes.NewBuffer(jsonData))
+    if err != nil {
+        fmt.Println("Error making POST request:", err)
+        return
+    }
+    fmt.Println(resp)
+}
+
+func readAnswerFromInput(answers []backend.Answer, q backend.Question) []backend.Answer {
+    reader := bufio.NewReader(os.Stdin)
+
+    input, _ := reader.ReadString('\n')
+
+    input = strings.TrimSpace(input)
+
+    answer := 0
+
+    fmt.Sscanf(input, "%d", &answer)
+
+    return append(answers, backend.Answer{
+        QuestionId: q.Id,
+        AnswerId: answer - 1,
+    })
+}
+
+func fetchQuestions(url string) ([]byte, error) {
+    resp, err := http.Get(url)
+    if err != nil {
+        return nil, err
+    }
+    defer resp.Body.Close()
+    return ioutil.ReadAll(resp.Body)
+}
+
+func unmarshalQuestions(body []byte) ([]backend.Question, error) {
+    var questions []backend.Question
+    err := json.Unmarshal(body, &questions)
+    if err != nil {
+        return nil, err
+    }
+    return questions, nil
+}
+
+func displayQuestions(questions []backend.Question) {
+    for _, q := range questions {
+        fmt.Printf("%d) %s \n", q.Id, q.Question)
+        for i, option := range q.Options {
+            fmt.Printf("\t %d) %s \n", i+1, option)
         }
     }
 }
