@@ -1,2 +1,2 @@
 # fast-track-test
-Fast Track test.
+Fast Track test
